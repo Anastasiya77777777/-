@@ -1,0 +1,193 @@
+import tkinter as tk
+from tkinter import messagebox
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Столовая")
+        self.geometry("600x500")
+        self.resizable(False, False)
+                # Общие данные
+        self.correct_login = "фми"
+        self.correct_password = "5255"
+        # Данные меню: список блюд и их цены
+        self.menu_items = [
+            {"name": "Борщ", "price": 150},
+            {"name": "Котлета с пюре", "price": 200},
+            {"name": "Салат Оливье", "price": 100},
+            {"name": "Компот", "price": 50},
+            {"name": "Чай", "price": 40}
+        ]
+        # Количество каждого блюда (индекс соответствует меню)
+        self.order_counts = [0] * len(self.menu_items)
+        # Инициализация всех страниц
+        self.frames = {}
+        for F in (StartPage, LoginPage, MenuPage, PaymentPage):
+            page_name = F.__name__
+            frame = F(parent=self, controller=self)
+            self.frames[page_name] = frame
+            frame.place(relwidth=1, relheight=1)
+        self.show_frame("StartPage")
+    def show_frame(self, page_name):
+        frame = self.frames[page_name]
+        frame.tkraise()
+        if page_name == "MenuPage":
+            frame.refresh_table()
+        elif page_name == "PaymentPage":
+            frame.update_total()
+    def reset_order(self):
+        self.order_counts = [0] * len(self.menu_items)
+class StartPage(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg="#f0f0f0")
+        self.controller = controller
+        
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure((0,1,2,3,4), weight=1)
+        label = tk.Label(self, text="Добро пожаловать в столовую", font=("Arial", 20, "bold"), bg="#f0f0f0")
+        label.grid(row=0, column=0, pady=20)
+        self.auth_button = tk.Button(self, text="Авторизация", font=("Arial", 16), width=20, command=lambda: controller.show_frame("LoginPage"))
+        self.auth_button.grid(row=2, column=0, pady=10)
+        self.reg_button = tk.Button(self, text="Регистрация", font=("Arial", 16), width=20, command=lambda: controller.show_frame("LoginPage"))
+        self.reg_button.grid(row=3, column=0, pady=10)
+class LoginPage(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg="#e6f2ff")
+        self.controller = controller
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure((0,1,2,3,4,5), weight=1)
+        label = tk.Label(self, text="Введите логин и пароль", font=("Arial", 18, "bold"), bg="#e6f2ff")
+        label.grid(row=0, column=0, pady=20)
+        self.login_var = tk.StringVar()
+        self.password_var = tk.StringVar()
+        login_label = tk.Label(self, text="Логин:", font=("Arial", 14), bg="#e6f2ff")
+        login_label.grid(row=1, column=0, sticky="w", padx=150)
+        login_entry = tk.Entry(self, textvariable=self.login_var, font=("Arial", 14))
+        login_entry.grid(row=2, column=0, ipadx=50, sticky="w", padx=150)
+        
+        password_label = tk.Label(self, text="Пароль:", font=("Arial", 14), bg="#e6f2ff")
+        password_label.grid(row=3, column=0, sticky="w", padx=150, pady=(10,0))
+        password_entry = tk.Entry(self, textvariable=self.password_var, font=("Arial", 14), show="*")
+        password_entry.grid(row=4, column=0, ipadx=50, sticky="w", padx=150)
+        login_button = tk.Button(self, text="Войти", font=("Arial", 14), width=15, command=self.check_credentials)
+        login_button.grid(row=5, column=0, pady=20)
+        back_button = tk.Button(self, text="Назад", font=("Arial", 12), command=lambda: controller.show_frame("StartPage"))
+        back_button.place(x=10, y=10)
+    def check_credentials(self):
+        login = self.login_var.get()
+        password = self.password_var.get()
+        if login == self.controller.correct_login and password == self.controller.correct_password:
+            self.login_var.set("")
+            self.password_var.set("")
+            self.controller.show_frame("MenuPage")
+        else:
+            messagebox.showerror("Ошибка", "Неверный логин или пароль")
+class MenuPage(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg="#fffaf0")
+        self.controller = controller
+        
+        title = tk.Label(self, text="Меню", font=("Arial", 22, "bold"), bg="#fffaf0")
+        title.pack(pady=15)
+        # Таблица блюд
+        self.table_frame = tk.Frame(self, bg="#fffaf0")
+        self.table_frame.pack(pady=10)
+        # Заголовки таблицы
+        tk.Label(self.table_frame, text="Блюдо", font=("Arial", 14, "bold"), width=20, anchor="w", bg="#f5deb3").grid(row=0, column=0, padx=1, pady=1)
+        tk.Label(self.table_frame, text="Цена (руб.)", font=("Arial", 14, "bold"), width=12, anchor="center", bg="#f5deb3").grid(row=0, column=1, padx=1, pady=1)
+        tk.Label(self.table_frame, text="Количество", font=("Arial", 14, "bold"), width=20, anchor="center", bg="#f5deb3").grid(row=0, column=2, padx=1, pady=1)
+        self.rows = []
+        self.qty_vars = []
+        # Кнопка оплата заказа
+        pay_button = tk.Button(self, text="Оплата заказа", font=("Arial", 16), bg="#90ee90", command=self.go_to_payment)
+        pay_button.pack(side="bottom", pady=20)
+        self.create_table()
+    def create_table(self):
+        for widget in self.table_frame.winfo_children():
+            if int(widget.grid_info().get("row", 0)) > 0:
+                widget.destroy()
+        self.qty_vars.clear()
+        self.rows.clear()
+        for i, item in enumerate(self.controller.menu_items):
+            name_label = tk.Label(self.table_frame, text=item["name"], font=("Arial", 14), width=20, anchor="w", bg="#fffaf0")
+            name_label.grid(row=i+1, column=0, padx=1, pady=1)
+            price_label = tk.Label(self.table_frame, text=str(item["price"]), font=("Arial", 14), width=12, anchor="center", bg="#fffaf0")
+            price_label.grid(row=i+1, column=1, padx=1, pady=1)
+            # Контейнер для кнопок +
+            qty_frame = tk.Frame(self.table_frame, bg="#fffaf0")
+            qty_frame.grid(row=i+1, column=2, padx=1, pady=1)
+            qty_var = tk.IntVar(value=self.controller.order_counts[i])
+            self.qty_vars.append(qty_var)
+            btn_minus = tk.Button(qty_frame, text="-", font=("Arial", 12), width=3, command=lambda idx=i: self.change_qty(idx, -1))
+            btn_minus.pack(side="left")
+            qty_label = tk.Label(qty_frame, textvariable=qty_var, font=("Arial", 14), width=5)
+            qty_label.pack(side="left", padx=5)
+            btn_plus = tk.Button(qty_frame, text="+", font=("Arial", 12), width=3, command=lambda idx=i: self.change_qty(idx, +1))
+            btn_plus.pack(side="left")
+    def change_qty(self, index, delta):
+        new_val = self.controller.order_counts[index] + delta
+        if new_val >= 0:
+            self.controller.order_counts[index] = new_val
+            self.qty_vars[index].set(new_val)
+    def refresh_table(self):
+        # Обновляем значения счётчиков (если пользователь вернулся)
+        for i, qty_var in enumerate(self.qty_vars):
+            qty_var.set(self.controller.order_counts[i])
+    def go_to_payment(self):
+        total = sum(item["price"] * count for item, count in zip(self.controller.menu_items, self.controller.order_counts))
+        if total == 0:
+            messagebox.showwarning("Пустой заказ", "Пожалуйста, выберите хотя бы одно блюдо для оформления заказа.")
+            return
+        self.controller.show_frame("PaymentPage")
+class PaymentPage(tk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, bg="#f0fff0")
+        self.controller = controller
+        self.columnconfigure(0, weight=1)
+        title = tk.Label(self, text="Оплата заказа", font=("Arial", 22, "bold"), bg="#f0fff0")
+        title.grid(row=0, column=0, pady=20)
+        self.total_label = tk.Label(self, text="Итоговая сумма: 0 руб.", font=("Arial", 18), bg="#f0fff0")
+        self.total_label.grid(row=1, column=0, pady=10)
+        self.buttons_frame = tk.Frame(self, bg="#f0fff0")
+        self.buttons_frame.grid(row=2, column=0, pady=15)
+        self.back_button = tk.Button(self.buttons_frame, text="Вернуться в меню", font=("Arial", 14), command=self.back_to_menu)
+        self.back_button.pack(side="left", padx=20)
+        self.pay_button = tk.Button(self.buttons_frame, text="Оплатить", font=("Arial", 14), bg="#90ee90", command=self.show_payment_fields)
+        self.pay_button.pack(side="left", padx=20)
+        # Поля для ввода карты и кода
+        self.card_frame = tk.Frame(self, bg="#f0fff0")
+        self.card_frame.grid(row=3, column=0, pady=10)
+        self.card_frame.grid_remove()
+                card_label = tk.Label(self.card_frame, text="Номер карты:", font=("Arial", 14), bg="#f0fff0")
+        card_label.grid(row=0, column=0, sticky="e", padx=10, pady=5)
+        self.card_entry = tk.Entry(self.card_frame, font=("Arial", 14))
+        self.card_entry.grid(row=0, column=1, pady=5)
+        code_label = tk.Label(self.card_frame, text="Код из SMS:", font=("Arial", 14), bg="#f0fff0")
+        code_label.grid(row=1, column=0, sticky="e", padx=10, pady=5)
+        self.code_entry = tk.Entry(self.card_frame, font=("Arial", 14), show="*")
+        self.code_entry.grid(row=1, column=1, pady=5)
+        self.confirm_button = tk.Button(self.card_frame, text="Подтвердить оплату", font=("Arial", 14), bg="#90ee90", command=self.confirm_payment)
+        self.confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
+    def update_total(self):
+        total = sum(item["price"] * count for item, count in zip(self.controller.menu_items, self.controller.order_counts))
+        self.total_label.config(text=f"Итоговая сумма: {total} руб.")
+        # Скрываем поля оплаты при каждом входе
+        self.card_frame.grid_remove()
+        self.card_entry.delete(0, tk.END)
+        self.code_entry.delete(0, tk.END)
+    def back_to_menu(self):
+        self.controller.show_frame("MenuPage")
+    def show_payment_fields(self):
+        self.card_frame.grid()
+    def confirm_payment(self):
+        card_num = self.card_entry.get().strip()
+        code = self.code_entry.get().strip()
+        if not card_num or not code:
+            messagebox.showwarning("Ошибка", "Пожалуйста, заполните все поля для оплаты.")
+            return
+        # Здесь можно добавить проверку формата карты и кода, но для простоты примем любой ввод
+        messagebox.showinfo("Оплата", "Оплата прошла успешно! Спасибо за заказ.")
+        self.controller.reset_order()
+        self.controller.show_frame("StartPage")
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
